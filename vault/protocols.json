@@ -1,0 +1,47 @@
+{
+  "morning_brief": {
+    "steps": [
+      "check calendar for today",
+      "check inbox for urgent",
+      "check task queue status",
+      "summarize weather"
+    ],
+    "description": "Daily morning briefing routine"
+  },
+  "focus_mode": {
+    "steps": [
+      "mute notifications",
+      "close distracting apps",
+      "set status to focused",
+      "start focus timer"
+    ],
+    "description": "Enter deep work mode"
+  },
+  "deploy": {
+    "steps": [
+      "run tests",
+      "build project",
+      "push to remote",
+      "notify on completion"
+    ],
+    "description": "Standard deployment sequence"
+  },
+  "workshop_start": {
+    "steps": [
+      "open project",
+      "check git status",
+      "run tests",
+      "show todo"
+    ],
+    "description": "Initialize workshop session"
+  },
+  "shutdown": {
+    "steps": [
+      "save all",
+      "commit changes",
+      "sync vault",
+      "power down"
+    ],
+    "description": "Graceful shutdown"
+  }
+}

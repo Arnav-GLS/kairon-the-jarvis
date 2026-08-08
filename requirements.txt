@@ -1,0 +1,4 @@
+psutil>=5.9.0
+pyttsx3>=2.90
+# whisper (optional, for voice) - install with: pip install openai-whisper
+# ollama (for local LLM) - install separately

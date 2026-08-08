@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+config.json.local
+*.key
+
+# Logs
+*.log
+
+# Vault (optional - keep if you want versioned memory)
+# vault/daily/
+# vault/tasks/
