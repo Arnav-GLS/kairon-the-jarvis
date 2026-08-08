@@ -6,7 +6,7 @@ orch = Orchestrator(
     vault_path=r'C:\Users\ASUS\kairon\vault',
     skills_path=r'C:\Users\ASUS\kairon\skills',
     persona_path=r'C:\Users\ASUS\kairon\persona.md',
-    config={'wake_words': ["what's up buddy", "daddy's home", "how's going on"], 'llm': {'provider': 'groq', 'model': 'llama3-70b-8192'}},
+    config={'wake_phrases': ["what's up buddy", "daddy's home", "how's going on"], 'llm': {'provider': 'groq', 'model': 'llama3-70b-8192'}},
 )
 
 for skill in orch.skills:
@@ -15,7 +15,7 @@ for skill in orch.skills:
     if hasattr(skill, 'set_llm'):
         skill.set_llm(orch.llm)
 
-orch.start_ambient()
+print(orch.startup())
 
 print('=== ORIENT ===')
 r = orch.handle('orient')
@@ -53,4 +53,8 @@ print('=== PROTOCOL ===')
 r = orch.handle('run focus_mode')
 print('Steps:', len(r['results']))
 
-print('All systems go. Sir.')
+print('=== FULL STATUS ===')
+r = orch.handle('full status')
+print(r['result']['message'][:400])
+
+print('\\nAll systems go. Sir.')

@@ -20,8 +20,8 @@ class ProtocolRegistry:
     def get(self, name: str) -> Dict:
         return self.protocols.get(name)
 
-    def list_protocols(self) -> List[Dict]:
-        return [{"name": k, "description": v.get("description", "")} for k, v in self.protocols.items()]
+    def list_protocols(self) -> List[str]:
+        return list(self.protocols.keys())
 
     def _load(self):
         with open(self.config_path, "r") as f:
