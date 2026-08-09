@@ -62,15 +62,27 @@ class Orchestrator:
             return f.read()
 
     def startup(self) -> str:
-        """JARVIS startup sequence."""
+        """JARVIS startup sequence with time-aware greeting."""
         self.startup_complete = True
         self.watch_loop.start()
+        
+        # Time-aware greeting
+        from datetime import datetime
+        hour = datetime.now().hour
+        if 5 <= hour < 12:
+            greeting = "Good morning"
+        elif 12 <= hour < 17:
+            greeting = "Good afternoon"
+        elif 17 <= hour < 22:
+            greeting = "Good evening"
+        else:
+            greeting = "It's late"
         
         # Check systems
         env_skill = next((s for s in self.skills if s.name == "environment"), None)
         house_skill = next((s for s in self.skills if s.name == "house"), None)
         
-        lines = ["Good evening, sir.", "Kairon systems coming online."]
+        lines = [f"{greeting}, sir. How to change the world now?"]
         
         if env_skill:
             state = env_skill.check_state()
@@ -84,7 +96,6 @@ class Orchestrator:
             if status.get("ok"):
                 lines.append("House security: nominal.")
         
-        lines.append("How may I assist you, sir?")
         return "\n".join(lines)
 
     def shutdown(self) -> str:
