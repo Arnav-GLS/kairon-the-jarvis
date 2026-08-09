@@ -11,16 +11,24 @@ class WatchLoop:
         self.interval = interval_seconds
         self._stop = threading.Event()
         self._thread: threading.Thread = None
+        self._thread_lock = threading.Lock()
         self.relevance_threshold = 0.5
 
     def start(self):
-        if self._thread and self._thread.is_alive():
-            return
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
+        with self._thread_lock:
+            if self._thread and self._thread.is_alive():
+                return
+            self._stop.clear()
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
 
     def stop(self):
         self._stop.set()
+
+    def join(self, timeout: float = None):
+        with self._thread_lock:
+            if self._thread and self._thread.is_alive():
+                self._thread.join(timeout=timeout)
 
     def _run(self):
         while not self._stop.is_set():

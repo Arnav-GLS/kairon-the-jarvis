@@ -1,5 +1,6 @@
 """Identity: authority gating. Wake phrases unlock destructive tier. Verifies who is asking. Multi-tenant ready."""
 import json
+import difflib
 from pathlib import Path
 from typing import Dict, Set, List
 
@@ -13,46 +14,59 @@ class IdentityGate:
         self.teams: Dict[str, List[str]] = {}  # team_name -> [members]
         self.config_path = str(Path(vault_path) / "identity.md")
         self._load()
-
+    
     def is_primary(self, requester: str) -> bool:
         if requester == "primary":
             return True
         return requester == self.primary.get("name")
-
+    
     def is_trusted(self, requester: str) -> bool:
         return requester in self.trusted
-
+    
     def is_team_member(self, requester: str, team: str) -> bool:
         return requester in self.teams.get(team, [])
-
+    
     def can(self, requester: str, action_tier: str, team: str = None) -> bool:
         if action_tier == "read":
             return True
         if action_tier == "side_effect":
-            return self.is_trusted(requester) or self.is_primary(requester) or (team and self.is_team_member(requester, team))
+            return self.is_trusted(requester) or self.is_primary(requester) or (team is not None and self.is_team_member(requester, team))
         if action_tier == "destructive":
             return self.is_primary(requester)
         return False
-
+    
     def add_trusted(self, name: str):
         self.trusted.add(name)
         self._save()
-
+    
     def set_primary(self, name: str, device_id: str = None, voiceprint: str = None):
         self.primary = {"name": name, "device_id": device_id, "voiceprint": voiceprint}
         self._save()
-
+    
     def add_team(self, team_name: str, members: List[str]):
         self.teams[team_name] = members
         self._save()
-
+    
     def verify_wake_phrase(self, phrase: str) -> bool:
+        """Verify wake phrase with fuzzy matching for STT tolerance."""
         phrase_lower = phrase.lower().strip()
-        return any(wp.lower() in phrase_lower for wp in self.WAKE_PHRASES)
-
+        
+        # Exact match first (fast path)
+        for wp in self.WAKE_PHRASES:
+            if wp.lower() in phrase_lower:
+                return True
+        
+        # Fuzzy match for STT tolerance
+        for wp in self.WAKE_PHRASES:
+            ratio = difflib.SequenceMatcher(None, wp.lower(), phrase_lower).ratio()
+            if ratio >= 0.75:
+                return True
+        
+        return False
+    
     def get_wake_phrases(self) -> List[str]:
         return self.WAKE_PHRASES.copy()
-
+    
     def _load(self):
         p = Path(self.config_path)
         if p.exists():
@@ -67,7 +81,7 @@ class IdentityGate:
                         self.teams = json.loads(line.split(":", 1)[1].strip())
                     except:
                         pass
-
+    
     def _save(self):
         p = Path(self.config_path)
         p.parent.mkdir(parents=True, exist_ok=True)

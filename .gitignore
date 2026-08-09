@@ -19,12 +19,26 @@ Thumbs.db
 
 # Secrets
 .env
+config.json
 config.json.local
 *.key
+*.token
 
 # Logs
 *.log
 
-# Vault (optional - keep if you want versioned memory)
-# vault/daily/
-# vault/tasks/
+# Vault (contains user data, secrets, and session data)
+vault/
+!vault/README.md
+!vault/protocols.json
+!vault/identity.md
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Distribution
+dist/
+build/
+*.egg-info/

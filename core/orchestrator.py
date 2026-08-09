@@ -2,6 +2,10 @@
 import json
 import sys
 import re
+import time
+import threading
+import difflib
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List
 from datetime import datetime
@@ -54,7 +58,10 @@ class Orchestrator:
         self.persona = self._load_persona(persona_path)
         self.config = config
         self.session_unlocked = False
+        self.session_unlock_time = 0
+        self.session_timeout = config.get("session_timeout", 300)  # 5 minutes default
         self.startup_complete = False
+        self._vault_lock = threading.Lock()
         self.vault.orient()
 
     def _load_persona(self, path: str) -> str:
@@ -101,6 +108,10 @@ class Orchestrator:
     def shutdown(self) -> str:
         """JARVIS shutdown sequence."""
         self.watch_loop.stop()
+        # Wait for watch loop thread to finish (max 2 seconds)
+        if self.watch_loop._thread and self.watch_loop._thread.is_alive():
+            self.watch_loop._thread.join(timeout=2.0)
+        
         lines = [
             "Shutting down, sir.",
             "Vault synchronized.",
@@ -120,8 +131,13 @@ class Orchestrator:
             return self._execute_emergency(raw, requester)
         
         # Wake phrase check
+        if self.session_unlocked and (time.time() - self.session_unlock_time) > self.session_timeout:
+            self.session_unlocked = False
+            self.session_unlock_time = 0
+        
         if not self.session_unlocked and self._contains_wake_phrase(raw):
             self.session_unlocked = True
+            self.session_unlock_time = time.time()
             return {
                 "status": "unlocked", 
                 "message": "Authorization confirmed. Destructive tier unlocked for this session, sir."
@@ -238,7 +254,19 @@ class Orchestrator:
     def _contains_wake_phrase(self, raw: str) -> bool:
         wake_phrases = self.config.get("wake_phrases", ["what's up buddy", "daddy's home", "how's going on"])
         raw_lower = raw.lower()
-        return any(wp.lower() in raw_lower for wp in wake_phrases)
+        
+        # Exact match first (fast path)
+        for wp in wake_phrases:
+            if wp.lower() in raw_lower:
+                return True
+        
+        # Fuzzy match for STT tolerance (edit distance / similarity)
+        for wp in wake_phrases:
+            ratio = difflib.SequenceMatcher(None, wp.lower(), raw_lower).ratio()
+            if ratio >= 0.75:  # 75% similarity threshold
+                return True
+        
+        return False
 
     def _can_destructive(self, requester: str) -> bool:
         return self.session_unlocked and self.identity.is_primary(requester)

@@ -1,6 +1,7 @@
 """Memory: reads/writes the Obsidian vault — single source of truth."""
 import json
 import time
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -10,6 +11,7 @@ class Memory:
     def __init__(self, vault_path: str):
         self.vault_path = Path(vault_path)
         self.vault_path.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
         self._ensure_structure()
 
     def _ensure_structure(self):
@@ -43,14 +45,16 @@ class Memory:
         timestamp = datetime.now().strftime("%H:%M:%S")
         log_line = f"- [{timestamp}] {json.dumps(entry, ensure_ascii=False)}\n"
         
-        with open(daily_file, "a", encoding="utf-8") as f:
-            f.write(log_line)
+        with self._lock:
+            with open(daily_file, "a", encoding="utf-8") as f:
+                f.write(log_line)
 
     def write_note(self, category: str, filename: str, content: str):
         """Write a note to vault/category/filename.md"""
         category_path = self.vault_path / category
         category_path.mkdir(exist_ok=True)
-        (category_path / f"{filename}.md").write_text(content, encoding="utf-8")
+        with self._lock:
+            (category_path / f"{filename}.md").write_text(content, encoding="utf-8")
 
     def read_note(self, category: str, filename: str) -> Optional[str]:
         path = self.vault_path / category / f"{filename}.md"
@@ -61,8 +65,9 @@ class Memory:
     def append_note(self, category: str, filename: str, content: str):
         path = self.vault_path / category / f"{filename}.md"
         path.parent.mkdir(exist_ok=True)
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(f"\n{content}")
+        with self._lock:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(f"\n{content}")
 
     def _read_tasks(self) -> List[Dict]:
         tasks = []
