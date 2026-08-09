@@ -1,4 +1,20 @@
+# Core
 psutil>=5.9.0
+
+# Voice
 pyttsx3>=2.90
-# whisper (optional, for voice) - install with: pip install openai-whisper
-# ollama (for local LLM) - install separately
+openai-whisper>=20231117
+pvporcupine>=3.0.0
+pyaudio>=0.2.11
+
+# Hardware bridges
+paho-mqtt>=1.6.0
+pyserial>=3.5
+requests>=2.31.0
+
+# Optional: Local LLM
+# ollama (install separately)
+
+# Optional: Vision (for camera integration)
+# opencv-python>=4.8.0
+# ultralytics>=8.0.0
