@@ -25,8 +25,10 @@ class Skill:
         raw_lower = raw.lower()
         return any(t.lower() in raw_lower for t in self.triggers)
 
-    def run(self, raw: str) -> Dict[str, Any]:
+    def run(self, raw: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
         raw_lower = raw.lower()
+        if parameters is None:
+            parameters = {}
         
         # Hardware bridge commands
         if any(kw in raw_lower for kw in ["ha ", "home assistant", "mqtt", "serial", "bridge", "device"]):

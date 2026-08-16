@@ -41,7 +41,9 @@ class Skill:
         raw_lower = raw.lower()
         return any(t.lower() in raw_lower for t in self.triggers)
 
-    def run(self, raw: str) -> Dict[str, Any]:
+    def run(self, raw: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
+        if parameters is None:
+            parameters = {}
         raw_lower = raw.lower()
         
         # Built-in routines

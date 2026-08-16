@@ -53,7 +53,9 @@ class Skill:
             asyncio.set_event_loop(loop)
         return loop.run_until_complete(coro)
 
-    def run(self, raw: str) -> Dict[str, Any]:
+    def run(self, raw: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
+        if parameters is None:
+            parameters = {}
         raw_lower = raw.lower()
         
         # Navigate / Open

@@ -184,25 +184,30 @@ class Orchestrator:
     def _route_skill(self, cmd: Dict[str, Any], requester: str) -> Dict[str, Any]:
         raw = cmd.get("raw", "")
         
-        # Try exact skill matches first
-        for skill in self.skills:
-            if skill.matches(raw):
+        # Use LLM to classify intent and route to appropriate skill
+        intent = self._classify_intent(raw)
+        
+        if intent.get("action") == "skill":
+            skill_name = intent.get("skill")
+            skill = next((s for s in self.skills if s.name == skill_name), None)
+            
+            if skill:
                 tier = skill.tier
                 if tier == "destructive" and not self._can_destructive(requester):
                     return {"status": "blocked", "reason": "wake_phrase_required", "message": self._refusal()}
                 
-                result = skill.run(raw)
-                self.vault.log({"event": "skill_run", "skill": skill.name, "requester": requester, "input": raw})
+                # Pass extracted parameters to skill
+                result = skill.run(raw, intent.get("parameters", {}))
+                self.vault.log({"event": "skill_run", "skill": skill.name, "requester": requester, "input": raw, "intent": intent})
                 
-                # Add acknowledgment for side-effect/destructive
                 if tier in ("side_effect", "destructive") and result.get("ok"):
                     ack = self._acknowledgment()
                     if isinstance(result.get("message"), str):
-                        result["message"] = f"{ack}\n{result['message']}"
+                        result["message"] = f"{self._acknowledgment()}\n{result['message']}"
                 
-                return {"status": "ok", "result": result}
+                return {"status": "ok", "result": result, "intent": intent}
         
-        # Fallback to LLM with persona
+        # Fallback to LLM with persona for conversation
         return self._llm_fallback(raw, requester)
 
     def _llm_fallback(self, raw: str, requester: str) -> Dict[str, Any]:
@@ -210,6 +215,112 @@ class Orchestrator:
         response = self.llm.generate(prompt, max_tokens=500, temperature=0.2)
         self.vault.log({"event": "llm_fallback", "requester": requester, "input": raw, "response": response})
         return {"status": "ok", "result": {"response": response}}
+
+    def _classify_intent(self, raw: str) -> Dict[str, Any]:
+        """Use LLM to classify user intent and extract parameters."""
+        # Build skill descriptions for the LLM
+        skill_descriptions = []
+        for skill in self.skills:
+            triggers_str = ", ".join(skill.triggers[:5])
+            skill_descriptions.append(
+                f"- {skill.name} (tier: {skill.tier}, watchable: {skill.watchable}): "
+                f"Triggers: {triggers_str}. Description: {getattr(skill, 'description', 'No description')}"
+            )
+        
+        skills_text = "\n".join(skill_descriptions)
+        
+        prompt = f"""You are Kairon's intent classifier. Analyze the user's request and determine which skill should handle it.
+
+Available skills:
+{skills_text}
+
+User request: "{raw}"
+
+Respond with JSON only:
+{{
+  "action": "skill|conversation|protocol|task",
+  "skill": "skill_name_or_null",
+  "confidence": 0.0-1.0,
+  "reasoning": "brief explanation",
+  "parameters": {{"key": "value"}}
+}}
+
+Rules:
+- If user wants to control devices, use "environment" or "house"
+- If user wants to search web, use "research"
+- If user wants to control browser, use "browser"
+- If user wants screen analysis, use "screen"
+- If user wants to run a routine, use "routines"
+- If user wants to control hardware bridges, use "environment"
+- If user wants to install/manage skills, use "alexa_skill_manager"
+- If user wants to manage tasks, use "task"
+- If user wants to run a protocol, use "protocol"
+- If user wants to search memory, use "recall"
+- If user wants to run code/workshop, use "workshop"
+- If it's just conversation, use "conversation" with skill=null
+- Extract relevant parameters from the request
+
+Respond with ONLY the JSON."""
+        
+        try:
+            response = self.llm.generate(prompt, max_tokens=500, temperature=0.1)
+            # Parse JSON response
+            import json
+            response_text = response.strip()
+            if response_text.startswith("```json"):
+                response_text = response_text[7:-3].strip()
+            elif response_text.startswith("```"):
+                response_text = response_text[3:-3].strip()
+            
+            intent = json.loads(response_text)
+            if "action" not in intent:
+                intent["action"] = "conversation"
+            if "skill" not in intent:
+                intent["skill"] = None
+            if "parameters" not in intent:
+                intent["parameters"] = {}
+            return intent
+        except Exception as e:
+            self.vault.log({"event": "intent_classification_failed", "error": str(e), "raw": raw})
+            return self._fallback_classify(raw)
+    
+    def _fallback_classify(self, raw: str) -> Dict[str, Any]:
+        """Fallback keyword-based classification if LLM fails."""
+        raw_lower = raw.lower()
+        
+        skill_keywords = {
+            "environment": ["system", "cpu", "memory", "disk", "process", "temperature", "ha ", "home assistant", "mqtt", "serial", "bridge", "device", "bridge", "lights", "fan", "ac"],
+            "house": ["house", "home", "security", "alarm", "lock", "unlock", "door", "window", "camera", "guest"],
+            "browser": ["browser", "open", "navigate", "search", "click", "scroll", "screenshot", "tab", "go to", "visit"],
+            "screen": ["screen", "capture", "screenshot", "what's on screen", "read screen", "analyze screen"],
+            "routines": ["routine", "good morning", "good night", "movie mode", "study mode", "work mode", "away mode", "party mode"],
+            "research": ["research", "search", "look up", "find", "web search", "summarize"],
+            "recall": ["recall", "remember", "what did", "search memory", "find in vault"],
+            "pushback": ["pushback", "risk", "bad idea", "analyze risk", "should i", "is this safe"],
+            "house": ["house", "home", "security", "alarm", "lock", "unlock", "door", "window", "camera"],
+            "workshop": ["workshop", "git", "build", "test", "code", "project"],
+            "recall": ["recall", "remember", "search memory"],
+            "alexa_skill_manager": ["install skill", "uninstall skill", "list skills", "enable skill", "disable skill"],
+            "routines": ["routine", "good morning", "good night", "movie mode", "study mode", "work mode", "away mode", "party mode"],
+        }
+        
+        for skill_name, keywords in skill_keywords.items():
+            if any(kw in raw.lower() for kw in keywords):
+                return {
+                    "action": "skill",
+                    "skill": skill_name,
+                    "confidence": 0.6,
+                    "reasoning": f"Keyword match for {skill_name}",
+                    "parameters": {}
+                }
+        
+        return {
+            "action": "conversation",
+            "skill": None,
+            "confidence": 0.5,
+            "reasoning": "No skill match, falling back to conversation",
+            "parameters": {}
+        }
 
     def _run_protocol(self, name: str, args: str, requester: str) -> Dict[str, Any]:
         proto = self.protocols.get(name)
